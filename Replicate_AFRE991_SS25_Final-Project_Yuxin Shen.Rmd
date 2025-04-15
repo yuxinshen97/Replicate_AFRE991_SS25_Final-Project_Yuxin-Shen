@@ -1,0 +1,1087 @@
+---
+title: "Replicate_AFRE991_SS25_Final Project_Yuxin Shen"
+author: "Yuxin Shen"
+date: "2025-04-06"
+output: html_document
+---
+### Part 1: load package and Download Data
+```{r}
+library(haven)
+#we have four data set
+data1 <- read_dta("C:/Users/Administrator/Desktop/Afre 991/Final Project/Hansen-Ziebarth_AEJ_Replication_1.dta")
+data2 <- read_dta("C:/Users/Administrator/Desktop/Afre 991/Final Project/Hansen-Ziebarth_AEJ_Replication_2.dta")
+data3 <- read_dta("C:/Users/Administrator/Desktop/Afre 991/Final Project/Hansen-Ziebarth_AEJ_Replication_3.dta")
+data4 <- read_dta("C:/Users/Administrator/Desktop/Afre 991/Final Project/Hansen-Ziebarth_AEJ_Replication_4.dta")
+```
+
+## Part 2:replication Table 1、Table 4、Table 5 and Appendix Table 1 using data1
+
+### Table 1: Comparing the Characteristics of Businesses across Regions of Mississippi in 1929
+```{r eval = FALSE}
+# Step 1: Filter data for 1929 and convert key variables to factors
+df_1929 <- data1 %>%
+  filter(year == 1929) %>%
+  mutate(
+    SIC_Industry = as.factor(SIC_Industry),
+    group_indic = as.factor(group_indic),
+    general = as.factor(general)
+  )
+
+# Step 2: Function to calculate group percentages
+make_table <- function(data, varname, region_var = "stl") {
+  data_clean <- data[!is.na(data[[varname]]), ]
+  dummies <- model.matrix(~ data_clean[[varname]] - 1) %>% as.data.frame()
+  dummy_df <- bind_cols(region = data_clean[[region_var]], dummies)
+  
+  pct_df <- dummy_df %>%
+    group_by(region) %>%
+    summarise(across(everything(), ~ round(mean(.x) * 100, 0)), .groups = "drop")
+  
+  long_df <- pivot_longer(pct_df, -region, names_to = "category", values_to = "percent")
+  wide_df <- pivot_wider(long_df, names_from = region, values_from = percent)
+  
+  wide_df$category <- gsub("^.*\\]", "", wide_df$category)
+  return(wide_df)
+}
+
+# Step 3: Generate category tables
+table_sic    <- make_table(df_1929, "SIC_Industry")    # SIC industry category
+table_net    <- make_table(df_1929, "group_indic")     # Net worth category
+table_credit <- make_table(df_1929, "general")         # Credit rating category
+
+# Step 4: Combine tables
+value_columns <- bind_rows(
+  table_sic %>% mutate(group = "SIC group"),
+  table_net %>% mutate(group = "Net worth group"),
+  table_credit %>% mutate(group = "General credit rating")
+) %>%
+  rename(`Southern (Atlanta)` = `0`, `Northern (St. Louis)` = `1`)
+
+# ✅ Step 5: Auto-generate label map using levels of factor variables
+label_map <- bind_rows(
+  tibble(
+    group = "SIC group",
+    category = as.character(seq_along(levels(df_1929$SIC_Industry))),
+    label = levels(df_1929$SIC_Industry)
+  ),
+  tibble(
+    group = "Net worth group",
+    category = as.character(seq_along(levels(df_1929$group_indic))),
+    label = levels(df_1929$group_indic)
+  ),
+  tibble(
+    group = "General credit rating",
+    category = as.character(seq_along(levels(df_1929$general))),
+    label = levels(df_1929$general)
+  )
+)
+
+# Step 6: Merge with label map to replace numeric category
+value_columns <- left_join(value_columns, label_map, by = c("category", "group")) %>%
+  mutate(category = coalesce(label, category)) %>%
+  select(-label)
+
+# Step 7: Insert section headers and clean format
+table_all <- bind_rows(
+  tibble(category = "SIC group", `Southern (Atlanta)` = NA, `Northern (St. Louis)` = NA),
+  filter(value_columns, group == "SIC group") %>% 
+    select(-group) %>%
+    mutate(category = paste0(" ", category)),
+
+  tibble(category = "Net worth group", `Southern (Atlanta)` = NA, `Northern (St. Louis)` = NA),
+  filter(value_columns, group == "Net worth group") %>%
+    select(-group) %>%
+    mutate(category = paste0(" ", category)),
+
+  tibble(category = "General credit rating", `Southern (Atlanta)` = NA, `Northern (St. Louis)` = NA),
+  filter(value_columns, group == "General credit rating") %>%
+    select(-group) %>%
+    mutate(category = paste0(" ", category))
+) %>%
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.), "", as.character(.))))
+
+# Step 8: Export as HTML (via stargazer)
+stargazer::stargazer(
+  table_all,
+  summary = FALSE,
+  type = "html",
+  title = "TABLE 1—COMPARING THE CHARACTERISTICS OF BUSINESSES ACROSS REGIONS OF MISSISSIPPI IN 1929",
+  rownames = FALSE,
+  out = "table_final.html"
+)
+
+```
+<table style="text-align:center"><caption><strong>TABLE 1—COMPARING THE CHARACTERISTICS OF BUSINESSES ACROSS REGIONS OF MISSISSIPPI IN 1929</strong></caption>
+<tr><td colspan="3" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">category</td><td>Southern (Atlanta)</td><td>Northern (St. Louis)</td></tr>
+<tr><td colspan="3" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">SIC group</td><td></td><td></td></tr>
+<tr><td style="text-align:left"> 1</td><td>71</td><td>70</td></tr>
+<tr><td style="text-align:left"> 2</td><td>9</td><td>9</td></tr>
+<tr><td style="text-align:left"> 3</td><td>2</td><td>1</td></tr>
+<tr><td style="text-align:left"> 4</td><td>11</td><td>10</td></tr>
+<tr><td style="text-align:left"> 8</td><td>2</td><td>4</td></tr>
+<tr><td style="text-align:left"> 8</td><td>5</td><td>5</td></tr>
+<tr><td style="text-align:left"> 9</td><td>0</td><td>0</td></tr>
+<tr><td style="text-align:left">Net worth group</td><td></td><td></td></tr>
+<tr><td style="text-align:left"> 1</td><td>4</td><td>4</td></tr>
+<tr><td style="text-align:left"> 2</td><td>10</td><td>8</td></tr>
+<tr><td style="text-align:left"> 3</td><td>25</td><td>27</td></tr>
+<tr><td style="text-align:left"> 4</td><td>37</td><td>35</td></tr>
+<tr><td style="text-align:left"> 5</td><td>25</td><td>26</td></tr>
+<tr><td style="text-align:left">General credit rating</td><td></td><td></td></tr>
+<tr><td style="text-align:left"> 1</td><td>4</td><td>5</td></tr>
+<tr><td style="text-align:left"> 2</td><td>7</td><td>8</td></tr>
+<tr><td style="text-align:left"> 3</td><td>23</td><td>23</td></tr>
+<tr><td style="text-align:left"> 4</td><td>22</td><td>20</td></tr>
+<tr><td style="text-align:left"> 5</td><td>45</td><td>45</td></tr>
+<tr><td colspan="3" style="border-bottom: 1px solid black"></td></tr></table>
+
+### Table4: Differences in the Probability of Exit from 1930 to 1931 (columns 1–4) and from 1931 to 1935 (columns 5–8) across Regions of Mississippi
+```{r eval = FALSE}
+# Short-run regressions
+model1 <- feols(exits ~ stl + stl_1930 + factor(year), 
+                data = data1[data1$year %in% c(1929, 1930), ], 
+                notes = FALSE)
+
+model2 <- feols(exits ~ stl + stl_1930 + factor(year) * factor(SIC_Industry), 
+                data = data1[data1$year %in% c(1929, 1930), ], 
+                notes = FALSE)
+
+model3 <- feols(exits ~ stl + stl_1930 + group_indic + general + 
+                  factor(year) * factor(SIC_Industry), 
+                data = data1[data1$year %in% c(1929, 1930), ],
+                notes = FALSE)
+
+model4 <- feols(exits ~ stl + stl_1930 + group_indic + general + 
+                  factor(year) * factor(SIC_Industry), 
+                data = data1[data1$year %in% c(1929, 1930) & data1$delta == 0, ],
+                notes = FALSE)
+
+# Long-run regressions
+model5 <- feols(exits ~ stl + stl_1931 + factor(year), 
+                data = data1[data1$year %in% c(1929, 1931), ], 
+                notes = FALSE)
+
+model6 <- feols(exits ~ stl + stl_1931 + factor(year) * factor(SIC_Industry), 
+                data = data1[data1$year %in% c(1929, 1931), ],
+                notes = FALSE)
+
+model7 <- feols(exits ~ stl + stl_1931 + group_indic + general + 
+                  factor(year) * factor(SIC_Industry), 
+                data = data1[data1$year %in% c(1929, 1931), ],
+                notes = FALSE)
+
+model8 <- feols(exits ~ stl + stl_1931 + group_indic + general + 
+                  factor(year) * factor(SIC_Industry), 
+                data = data1[data1$year %in% c(1929, 1931) & data1$delta == 0, ],
+                notes = FALSE)
+
+# construct model list
+model_list <- list(model1, model2, model3, model4, model5, model6, model7, model8)
+
+etable_4 <- etable(
+  model_list,
+  markdown = TRUE,
+  title = "Table 4: Differences in the Probability of Exit (R Replication)",
+  headers = c("Short (1)", "Short (2)", "Short (3)", "Short (4)",
+              "Long (5)", "Long (6)", "Long (7)", "Long (8)"),
+  depvar = TRUE,
+  coefstat = "se",
+  signif.code = c("***"=0.001, "**"=0.01, "*"=0.05),
+  drop.section = "fixef",
+  digits = 3,
+  keep = c("%stl", "%stl_1930", "%stl_1931"),  
+  dict = c(
+    stl = "St. Louis",
+    stl_1930 = "St. Louis × (1930–1931)",
+    stl_1931 = "St. Louis × (1931–1935)"
+  ),
+  extralines = list(
+    "_^Observations" = sapply(model_list, function(m) format(nobs(m), big.mark = ",")),
+    "_^Controls" = c("No", "SIC", "SIC + NW + Rating", "SIC + NW + Rating", 
+                     "No", "SIC", "SIC + NW + Rating", "SIC + NW + Rating")
+  )
+)
+
+stargazer(etable_4, type = "html", title = "Table 4: Differences in the Probability of Exit (R Replication)", summary = FALSE)
+
+
+```
+<table style="text-align:center"><caption><strong>Table 4: Differences in the Probability of Exit (R Replication)</strong></caption>
+<tr><td colspan="10" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left"></td><td>.1</td><td>model 1</td><td>model 2</td><td>model 3</td><td>model 4</td><td>model 5</td><td>model 6</td><td>model 7</td><td>model 8</td></tr>
+<tr><td colspan="10" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">1</td><td></td><td>Short (1)</td><td>Short (2)</td><td>Short (3)</td><td>Short (4)</td><td>Long (5)</td><td>Long (6)</td><td>Long (7)</td><td>Long (8)</td></tr>
+<tr><td style="text-align:left">2</td><td>Dependent Var.:</td><td>exits</td><td>exits</td><td>exits</td><td>exits</td><td>exits</td><td>exits</td><td>exits</td><td>exits</td></tr>
+<tr><td style="text-align:left">3</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">4</td><td>St. Louis</td><td>-0.074* * * (0.007)</td><td>-0.073* * * (0.007)</td><td>-0.073* * * (0.007)</td><td>-0.082* * * (0.008)</td><td>-0.074* * * (0.007)</td><td>-0.073* * * (0.007)</td><td>-0.074* * * (0.007)</td><td>-0.082* * * (0.008)</td></tr>
+<tr><td style="text-align:left">5</td><td>St. Louis ×(1930–1931)</td><td>0.146* * * (0.010)</td><td>0.147* * * (0.010)</td><td>0.148* * * (0.010)</td><td>0.161* * * (0.012)</td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">6</td><td>St. Louis ×(1931–1935)</td><td></td><td></td><td></td><td></td><td>0.117* * * (0.010)</td><td>0.120* * * (0.010)</td><td>0.121* * * (0.010)</td><td>0.131* * * (0.012)</td></tr>
+<tr><td style="text-align:left">7</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">8</td><td>S.E. type</td><td>IID</td><td>IID</td><td>IID</td><td>IID</td><td>IID</td><td>IID</td><td>IID</td><td>IID</td></tr>
+<tr><td style="text-align:left">9</td><td>Observations</td><td>38,483</td><td>38,372</td><td>38,372</td><td>27,078</td><td>39,050</td><td>38,930</td><td>38,929</td><td>27,852</td></tr>
+<tr><td style="text-align:left">10</td><td>Controls</td><td>No</td><td>SIC</td><td>SIC + NW + Rating</td><td>SIC + NW + Rating</td><td>No</td><td>SIC</td><td>SIC + NW + Rating</td><td>SIC + NW + Rating</td></tr>
+<tr><td style="text-align:left">11</td><td>Observations</td><td>38,483</td><td>38,372</td><td>38,372</td><td>27,078</td><td>39,050</td><td>38,930</td><td>38,929</td><td>27,852</td></tr>
+<tr><td style="text-align:left">12</td><td>R2</td><td>0.00969</td><td>0.01158</td><td>0.01799</td><td>0.02120</td><td>0.09040</td><td>0.09446</td><td>0.11604</td><td>0.10454</td></tr>
+<tr><td style="text-align:left">13</td><td>Adj. R2</td><td>0.00961</td><td>0.01116</td><td>0.01753</td><td>0.02055</td><td>0.09033</td><td>0.09411</td><td>0.11566</td><td>0.10399</td></tr>
+<tr><td colspan="10" style="border-bottom: 1px solid black"></td></tr></table>
+
+
+###Table 5:Distribution of Credit Ratings for Businesses Exiting Across Regions of Mississippi
+```{r eval = FALSE}
+# assume data1 is original data
+table5_data <- data1 %>%
+  filter(exits == 1, general <= 4) %>%
+  mutate(
+    general = factor(general, labels = c("High", "Good", "Fair", "Limited")),
+    year_group = case_when(
+      year == 1929 ~ "1929 and 1930",
+      year == 1930 ~ "1930 and 1931",
+      year == 1931 ~ "1931 and 1935",
+      TRUE ~ as.character(year)
+    ),
+    region = ifelse(stl == 1, "St. Louis", "Atlanta")
+  ) %>%
+  group_by(region, year_group, general) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  group_by(region, year_group) %>%
+  mutate(percent = round(100 * count / sum(count))) %>%
+  select(-count) %>%
+  pivot_wider(names_from = general, values_from = percent) %>%
+  arrange(region, year_group)
+
+# replace column_to_rownames()：
+table5_clean <- table5_data %>%
+  unite("row_label", region, year_group, sep = ": ") %>%
+  as.data.frame()
+
+rownames(table5_clean) <- table5_clean$row_label
+table5_clean <- table5_clean[, -which(names(table5_clean) == "row_label")]
+
+stargazer(table5_clean,
+          type = "html",
+          summary = FALSE,
+          digits = 0,
+          title = "Table 5 — distribution of credit ratings for businesses exiting across regions of Mississippi")
+```
+<table style="text-align:center"><caption><strong>Table 5 — distribution of credit ratings for businesses exiting across regions of Mississippi</strong></caption>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left"></td><td>High</td><td>Good</td><td>Fair</td><td>Limited</td></tr>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">Atlanta: 1926</td><td>6</td><td>8</td><td>33</td><td>53</td></tr>
+<tr><td style="text-align:left">Atlanta: 1929 and 1930</td><td>8</td><td>12</td><td>38</td><td>43</td></tr>
+<tr><td style="text-align:left">Atlanta: 1930 and 1931</td><td>4</td><td>4</td><td>15</td><td>77</td></tr>
+<tr><td style="text-align:left">Atlanta: 1931 and 1935</td><td>5</td><td>8</td><td>44</td><td>44</td></tr>
+<tr><td style="text-align:left">St. Louis: 1926</td><td>5</td><td>9</td><td>38</td><td>48</td></tr>
+<tr><td style="text-align:left">St. Louis: 1929 and 1930</td><td>7</td><td>12</td><td>39</td><td>43</td></tr>
+<tr><td style="text-align:left">St. Louis: 1930 and 1931</td><td>5</td><td>5</td><td>21</td><td>69</td></tr>
+<tr><td style="text-align:left">St. Louis: 1931 and 1935</td><td>6</td><td>9</td><td>44</td><td>41</td></tr>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr></table>
+
+
+### Appendix Table 1: Exit with triple interaction
+```{r eval = FALSE}
+library(fixest)
+library(stargazer)
+
+# Step 1: select data only containing general <= 4
+data_app1_1930 <- data1[data1$year %in% c(1929, 1930) & data1$general <= 4, ]
+data_app1_1931 <- data1[data1$year %in% c(1929, 1931) & data1$general <= 4, ]
+
+# Step 2: adjust model using SIC_Industry fix effect
+model_app1_1930 <- feols(
+  exits ~ hgc + stl + y30 + hgc_stl + hgc_y30 + y30_stl + hgc_y30_stl | SIC_Industry,
+  data = data_app1_1930,
+  cluster = ~SIC_Industry,
+  notes = FALSE
+)
+
+model_app1_1931 <- feols(
+  exits ~ hgc + stl + y31 + hgc_stl + hgc_y31 + y31_stl + hgc_y31_stl | SIC_Industry,
+  data = data_app1_1931,
+  cluster = ~SIC_Industry,
+  notes = FALSE
+)
+
+# Step 3: model list
+appendix_model_list <- list(model_app1_1930, model_app1_1931)
+
+# Step 4: construct etable 
+etable_app1 <- etable(
+  appendix_model_list,
+  markdown = TRUE,
+  title = "Appendix Table 1: Interaction Effects on Exit Probability",
+  headers = c("1930-1931", "1931-1935"),  # 
+  depvar = TRUE,
+  coefstat = "se",
+  signif.code = c("***"=0.001, "**"=0.01, "*"=0.05),
+  drop.section = "fixef",
+  digits = 3,
+  keep = c("%hgc", "%stl", "%y30", "%y31",
+           "%hgc_stl", "%hgc_y30", "%hgc_y31",
+           "%y30_stl", "%y31_stl",
+           "%hgc_y30_stl", "%hgc_y31_stl"),
+  dict = c(
+    hgc = "Credit Quality",
+    stl = "St. Louis",
+    y30 = "1930",
+    y31 = "1931",
+    hgc_stl = "Credit x St. Louis",
+    hgc_y30 = "Credit x 1930",
+    hgc_y31 = "Credit x 1931",
+    y30_stl = "1930 x St. Louis",
+    y31_stl = "1931 x St. Louis",
+    hgc_y30_stl = "Credit x 1930 x St. Louis",
+    hgc_y31_stl = "Credit x 1931 x St. Louis"
+  ),
+  extralines = list(
+    "Observations" = sapply(appendix_model_list, function(m) format(nobs(m), big.mark = ","))
+  )
+)
+# Step 5: use stargazer for HTML table
+stargazer(etable_app1,
+          type = "html",
+          title = "Appendix Table 1: Interaction Effects on Exit Probability",
+          summary = FALSE,
+          rownames = TRUE)
+
+```
+<table style="text-align:center"><caption><strong>Appendix Table 1: Interaction Effects on Exit Probability</strong></caption>
+<tr><td colspan="4" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left"></td><td>.1</td><td>model 1</td><td>model 2</td></tr>
+<tr><td colspan="4" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">1</td><td></td><td>1930-1931</td><td>1931-1935</td></tr>
+<tr><td style="text-align:left">2</td><td>Dependent Var.:</td><td>exits</td><td>exits</td></tr>
+<tr><td style="text-align:left">3</td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">4</td><td>Credit Quality</td><td>-0.015 (0.027)</td><td>-0.006 (0.032)</td></tr>
+<tr><td style="text-align:left">5</td><td>St. Louis</td><td>-0.067* * * (0.005)</td><td>-0.066* * * (0.004)</td></tr>
+<tr><td style="text-align:left">6</td><td>1930</td><td>-0.134* * * (0.008)</td><td></td></tr>
+<tr><td style="text-align:left">7</td><td>Credit x St. Louis</td><td>-0.046 (0.020)</td><td>-0.046 (0.019)</td></tr>
+<tr><td style="text-align:left">8</td><td>Credit x 1930</td><td>-0.061 (0.056)</td><td></td></tr>
+<tr><td style="text-align:left">9</td><td>1930 x St. Louis</td><td>0.210* * * (0.023)</td><td></td></tr>
+<tr><td style="text-align:left">10</td><td>Credit x 1930 x St. Louis</td><td>-0.018 (0.059)</td><td></td></tr>
+<tr><td style="text-align:left">11</td><td>1931</td><td></td><td>0.247* * * (0.010)</td></tr>
+<tr><td style="text-align:left">12</td><td>Credit x 1931</td><td></td><td>-0.201* * * (0.032)</td></tr>
+<tr><td style="text-align:left">13</td><td>1931 x St. Louis</td><td></td><td>0.120* * * (0.009)</td></tr>
+<tr><td style="text-align:left">14</td><td>Credit x 1931 x St. Louis</td><td></td><td>0.067* (0.019)</td></tr>
+<tr><td style="text-align:left">15</td><td>Observations</td><td>12,616</td><td>21,420</td></tr>
+<tr><td style="text-align:left">16</td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">17</td><td>S.E.: Clustered</td><td>by: SIC_Industry</td><td>by: SIC_Industry</td></tr>
+<tr><td style="text-align:left">18</td><td>Observations</td><td>12,616</td><td>21,420</td></tr>
+<tr><td style="text-align:left">19</td><td>R2</td><td>0.01121</td><td>0.09421</td></tr>
+<tr><td style="text-align:left">20</td><td>Within R2</td><td>0.01048</td><td>0.09296</td></tr>
+<tr><td colspan="4" style="border-bottom: 1px solid black"></td></tr></table>
+
+
+##Part3 Table 2 first part, Table6 and table A2 using data2
+###Table 2— first panel_Percent of Bankrupt Businesses in SIC Groups across Regions of Mississippi before and after the Caldwell Event
+```{r eval = FALSE}
+# Step 1: Subset to non-missing timeperiod AND SIC_Industry
+df_table2 <- data2 %>%
+  filter(!is.na(timeperiod) & !is.na(SIC_Industry))
+
+# Step 2: Convert to factor
+df_table2$SIC_Industry <- factor(df_table2$SIC_Industry)
+
+# Step 3: Create dummy variables
+dummies <- model.matrix(~ SIC_Industry - 1, data = df_table2)
+dummy_df <- bind_cols(df_table2 %>% select(stl, aftercaldwell), as.data.frame(dummies))
+
+# Step 4: Collapse to mean (percentage) by stl and aftercaldwell
+pct_df <- dummy_df %>%
+  group_by(stl, aftercaldwell) %>%
+  summarise(across(starts_with("SIC_Industry"), ~ mean(.x) * 100), .groups = "drop")
+
+# Step 5: Normalize to row sums = 100 within each (stl, aftercaldwell)
+pct_df <- pct_df %>%
+  rowwise() %>%
+  mutate(scale = sum(c_across(starts_with("SIC_Industry")))) %>%
+  mutate(across(starts_with("SIC_Industry"), ~ 100 * .x / scale)) %>%
+  select(-scale) %>%
+  ungroup()
+
+# Step 6: Reshape long, then wide by stl
+long_df <- pct_df %>%
+  pivot_longer(cols = starts_with("SIC_Industry"), names_to = "SIC_Industry", values_to = "percent")
+
+long_df$SIC_Industry <- str_replace(long_df$SIC_Industry, "SIC_Industry", "")
+long_df$SIC_Industry <- as.integer(long_df$SIC_Industry)
+
+# Step 7: Wide by stl then wide by aftercaldwell — control for correct layout
+wide_stl <- long_df %>%
+  pivot_wider(names_from = stl, values_from = percent, names_prefix = "stl_")
+
+# 🔁 Switch St. Louis (stl_1) and Atlanta (stl_0) order in wide table
+wide_final <- wide_stl %>%
+  pivot_wider(names_from = aftercaldwell, values_from = c(stl_1, stl_0), names_sep = "_after_") %>%
+  select(SIC_Industry, 
+         stl_1_after_0, stl_0_after_0,  # Before Caldwell: St. Louis, Atlanta
+         stl_1_after_1, stl_0_after_1)  # After Caldwell: St. Louis, Atlanta
+
+# Step 8: Round + NA blank
+wide_final <- wide_final %>%
+  mutate(across(where(is.numeric), ~ round(.x, 1))) %>%
+  mutate(across(everything(), ~ replace_na(.x, "")))
+
+# Step 9: Replace SIC code with labels
+sic_labels <- c(
+  "Retail", "Wholesale", "Construction", "Manufacturing", "Mining",
+  "Agriculture, Forestry, Fishing", "", "Services", "Transport"
+)
+wide_final$SIC_Industry <- sic_labels[as.integer(wide_final$SIC_Industry)]
+
+wide_final <- wide_final %>%
+  select(
+    SIC_Industry,
+    stl_0_after_0, stl_1_after_0,  # Before Caldwell: Atlanta, St. Louis
+    stl_0_after_1, stl_1_after_1   # After Caldwell: Atlanta, St. Louis
+  )
+#name the column
+colnames(wide_final) <- c(
+  "SIC Industry",
+  "Atlanta (Before Caldwell)", 
+  "St. Louis (Before Caldwell)", 
+  "Atlanta (After Caldwell)", 
+  "St. Louis (After Caldwell)"
+)
+# Step 10: Export table
+stargazer(wide_final,
+          type = "html",
+          summary = FALSE,
+          rownames = FALSE,
+          title = "Table 2 — Percent of Bankrupt Businesses in SIC Groups Across Regions of Mississippi Before and After the Caldwell Event")
+
+```
+<table style="text-align:center"><caption><strong>Table 2 — Percent of Bankrupt Businesses in SIC Groups Across Regions of Mississippi Before and After the Caldwell Event</strong></caption>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">SIC Industry</td><td>Atlanta (Before Caldwell)</td><td>St. Louis (Before Caldwell)</td><td>Atlanta (After Caldwell)</td><td>St. Louis (After Caldwell)</td></tr>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">Retail</td><td>74.1</td><td>77.4</td><td>75</td><td>79.1</td></tr>
+<tr><td style="text-align:left">Wholesale</td><td>7.2</td><td>11.3</td><td>9</td><td>8.3</td></tr>
+<tr><td style="text-align:left">Construction</td><td>0.8</td><td>0</td><td>2.9</td><td>0.3</td></tr>
+<tr><td style="text-align:left">Manufacturing</td><td>11</td><td>9.4</td><td>8.7</td><td>9.3</td></tr>
+<tr><td style="text-align:left">Agriculture, Forestry, Fishing</td><td>5.3</td><td>0.6</td><td>1.3</td><td>1</td></tr>
+<tr><td style="text-align:left">Services</td><td>1.5</td><td>1.3</td><td>3.1</td><td>1.7</td></tr>
+<tr><td style="text-align:left">Transport</td><td>0</td><td>0</td><td>0</td><td>0.3</td></tr>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr></table>
+
+###Table 6: Differences in prob(filing) across FR districts before and immediately after Caldwell
+```{r eval = FALSE}
+# Before Caldwell
+model1 <- feols(filebefore ~ stl + q1, data = data2[data2$year == 1929, ], notes = FALSE)
+model2 <- feols(filebefore ~ stl + q1 + factor(SIC_Industry), data = data2[data2$year == 1929, ], notes = FALSE)
+model3 <- feols(filebefore ~ stl + q1 + factor(group_indic) + factor(general) + factor(SIC_Industry),
+                data = data2[data2$year == 1929, ], notes = FALSE)
+model4 <- feols(filebefore ~ stl + q1 + factor(group_indic) + factor(general) + factor(SIC_Industry),
+                data = data2[data2$year == 1929 & data2$extant == 1, ], notes = FALSE)
+
+# After Caldwell (only those not filed before)
+model5 <- feols(filertafter ~ stl + q1, data = data2[data2$year == 1929 & data2$filebefore == 0, ], notes = FALSE)
+model6 <- feols(filertafter ~ stl + q1 + factor(SIC_Industry), data = data2[data2$year == 1929 & data2$filebefore == 0, ], notes = FALSE)
+model7 <- feols(filertafter ~ stl + q1 + factor(group_indic) + factor(general) + factor(SIC_Industry),
+                data = data2[data2$year == 1929 & data2$filebefore == 0, ], notes = FALSE)
+model8 <- feols(filertafter ~ stl + q1 + factor(group_indic) + factor(general) + factor(SIC_Industry),
+                data = data2[data2$year == 1929 & data2$filebefore == 0 & data2$extant == 1, ], notes = FALSE)
+
+
+model_list6 <- list(model1, model2, model3, model4, model5, model6, model7, model8)
+
+etable_6 <- etable(
+  model_list6,
+  title = "Table 6 — Differences in the Probability of Filing for Bankruptcy Across Regions of Mississippi Before (columns 1–4) and Immediately After (columns 5–8) the Caldwell Crisis",
+  headers = c("Before (1)", "Before (2)", "Before (3)", "Before (4)", 
+              "After (5)", "After (6)", "After (7)", "After (8)"),
+  keep = "%stl",  # only keep the stl coefficient
+  coefstat = "se",
+  depvar = TRUE,
+  signif.code = c("***"=0.001, "**"=0.01, "*"=0.05),
+  digits = 3,
+  notes = NULL,
+  extralines = list(
+    "Observations" = sapply(model_list6, function(m) format(nobs(m), big.mark = ","))
+  )
+)
+
+# Step 3: use stargazer to save as HTML
+stargazer(etable_6,
+          type = "html",
+          title = "Table 6 — Differences in the Probability of Filing for Bankruptcy Across Regions of Mississippi Before (columns 1–4) and Immediately After (columns 5–8) the Caldwell Crisis",
+          summary = FALSE,
+          rownames = TRUE)
+
+```
+<table style="text-align:center"><caption><strong>Table 6 — Differences in the Probability of Filing for Bankruptcy Across Regions of Mississippi Before (columns 1–4) and Immediately After (columns 5–8) the Caldwell Crisis</strong></caption>
+<tr><td colspan="10" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left"></td><td>.1</td><td>model 1</td><td>model 2</td><td>model 3</td><td>model 4</td><td>model 5</td><td>model 6</td><td>model 7</td><td>model 8</td></tr>
+<tr><td colspan="10" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">1</td><td></td><td>Before (1)</td><td>Before (2)</td><td>Before (3)</td><td>Before (4)</td><td>After (5)</td><td>After (6)</td><td>After (7)</td><td>After (8)</td></tr>
+<tr><td style="text-align:left">2</td><td>Dependent Var.:</td><td>filebefore</td><td>filebefore</td><td>filebefore</td><td>filebefore</td><td>filertafter</td><td>filertafter</td><td>filertafter</td><td>filertafter</td></tr>
+<tr><td style="text-align:left">3</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">4</td><td>stl</td><td>-0.006* * * (0.002)</td><td>-0.007* * * (0.002)</td><td>-0.007* * * (0.002)</td><td>-0.009* * * (0.002)</td><td>-0.004* * * (0.001)</td><td>-0.004* * * (0.001)</td><td>-0.004* * * (0.001)</td><td>-0.005* * * (0.002)</td></tr>
+<tr><td style="text-align:left">5</td><td>Observations</td><td>20,185</td><td>20,064</td><td>20,064</td><td>14,204</td><td>19,858</td><td>19,738</td><td>19,738</td><td>13,942</td></tr>
+<tr><td style="text-align:left">6</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">7</td><td>S.E. type</td><td>IID</td><td>IID</td><td>IID</td><td>IID</td><td>IID</td><td>IID</td><td>IID</td><td>IID</td></tr>
+<tr><td style="text-align:left">8</td><td>Observations</td><td>20,185</td><td>20,064</td><td>20,064</td><td>14,204</td><td>19,858</td><td>19,738</td><td>19,738</td><td>13,942</td></tr>
+<tr><td style="text-align:left">9</td><td>R2</td><td>0.09039</td><td>0.09111</td><td>0.09377</td><td>0.09676</td><td>0.19723</td><td>0.19743</td><td>0.19899</td><td>0.22278</td></tr>
+<tr><td style="text-align:left">10</td><td>Adj. R2</td><td>0.09030</td><td>0.09070</td><td>0.09301</td><td>0.09568</td><td>0.19715</td><td>0.19706</td><td>0.19830</td><td>0.22183</td></tr>
+<tr><td colspan="10" style="border-bottom: 1px solid black"></td></tr></table>
+
+### Appendix Table 2: Differences in the probability of filing for bankruptcy across Federal Reserve districts of Mississippi before and immediately after the the Caldwell crisis.
+```{r eval = FALSE}
+
+# Step 1: Run models
+model_before <- feols(
+  filebefore ~ hgc + stl + hgc:stl,
+  data = data2[data2$year == 1929 & data2$general <= 4, ],
+  cluster = ~SIC_Industry,
+  notes = FALSE
+)
+
+model_after <- feols(
+  filertafter ~ hgc + stl + hgc:stl,
+  data = data2[data2$year == 1929 & data2$filebefore == 0 & data2$general <= 4, ],
+  cluster = ~SIC_Industry,
+  notes = FALSE
+)
+
+model_list <- list(model_before, model_after)
+
+# Step 2: Display nicely using etable (console preview or for .tex)
+etable(
+  model_list,
+  title = "Appendix 2 - Interaction of Credit Quality and Region on Bankruptcy",
+  headers = c("Before", "After"),
+  depvar = TRUE,
+  coefstat = "se",
+  signif.code = c("***" = 0.001, "**" = 0.01, "*" = 0.05),
+  keep = c("%hgc", "%stl", "%hgc:stl"),
+  dict = c(
+    "hgc" = "Good+",
+    "stl" = "St. Louis",
+    "hgc:stl" = "Good+*St. Louis"  
+  ),
+  digits = 3,
+  extralines = list(
+    "Observations" = sapply(model_list, function(m) format(nobs(m), big.mark = ","))
+  )
+)
+
+
+# Step 3: Export for paper using Stargazer
+model_before <- lm(filebefore ~ hgc + stl + hgc:stl,
+                   data = data2[data2$year == 1929 & data2$general <= 4, ])
+
+model_after <- lm(filertafter ~ hgc + stl + hgc:stl,
+                  data = data2[data2$year == 1929 & data2$filebefore == 0 & data2$general <= 4, ])
+
+
+stargazer(model_before, model_after,
+          type = "html",
+          title = "Appendix Table 2: Differences in the Probability of Filing for Bankruptcy Across Federal Reserve Districts of Mississippi Before and Immediately After the Caldwell Crisis.",
+          summary = FALSE,
+          covariate.labels = c("Good+", "St. Louis", "Good+*St. Louis"),
+          column.labels = c("Before", "After"),
+          keep = c("hgc", "stl", "hgc:stl"),
+          digits = 3,
+          omit.stat = c("f", "ser", "adj.rsq", "rsq"),
+          out = "appendix_table2_bankruptcy.html")
+
+```
+<table style="text-align:center"><caption><strong>Appendix Table 2: Differences in the Probability of Filing for Bankruptcy Across Federal Reserve Districts of Mississippi Before and Immediately After the Caldwell Crisis.</strong></caption>
+<tr><td colspan="3" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left"></td><td colspan="2"><em>Dependent variable:</em></td></tr>
+<tr><td></td><td colspan="2" style="border-bottom: 1px solid black"></td></tr>
+<tr><td style="text-align:left"></td><td>filebefore</td><td>filertafter</td></tr>
+<tr><td style="text-align:left"></td><td>Before</td><td>After</td></tr>
+<tr><td style="text-align:left"></td><td>(1)</td><td>(2)</td></tr>
+<tr><td colspan="3" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">Good+</td><td>-0.007<sup>*</sup></td><td>-0.008<sup>***</sup></td></tr>
+<tr><td style="text-align:left"></td><td>(0.004)</td><td>(0.003)</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td></tr>
+<tr><td style="text-align:left">St. Louis</td><td>-0.005<sup>**</sup></td><td>-0.006<sup>***</sup></td></tr>
+<tr><td style="text-align:left"></td><td>(0.002)</td><td>(0.002)</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td></tr>
+<tr><td style="text-align:left">Good+*St. Louis</td><td>-0.001</td><td>0.003</td></tr>
+<tr><td style="text-align:left"></td><td>(0.006)</td><td>(0.004)</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td></tr>
+<tr><td colspan="3" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">Observations</td><td>10,913</td><td>10,772</td></tr>
+<tr><td colspan="3" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left"><em>Note:</em></td><td colspan="2" style="text-align:right"><sup>*</sup>p<0.1; <sup>**</sup>p<0.05; <sup>***</sup>p<0.01</td></tr>
+</table>
+
+##Part4 Table7, table 8, table 2 part 2 and 3,
+
+###Table7：Differences in the Balance Sheets of Bankrupt Businesses across Regions of Mississippi before and after the Caldwell Crisis (have some problem)
+```{r eval = FALSE}
+
+# TABLE 7 REPLICATION: DIFFERENCES IN BALANCE SHEETS OF BANKRUPT BUSINESSES
+# Step 1: rerun four models（use robust SE，prevent SIC_Industry NA lead to missing obs）
+
+### thank you for prof. James helping me this!!!!!!
+
+# Run 4 regressions with robust SE and consistent NA handling
+m1 <- feols(
+  log_assets ~ stl + aftercaldwell + after_stl,
+  data = data3[data3$split_sample == 0 & !is.na(data3$log_assets), ],
+  se = "hetero", notes = FALSE
+)
+
+m2 <- feols(
+  log_assets ~ stl + aftercaldwell + after_stl,
+  data = data3[data3$split_sample == 1 & !is.na(data3$log_assets), ],
+  se = "hetero", notes = FALSE
+)
+
+m3 <- feols(
+  log_lev ~ stl + aftercaldwell + after_stl,
+  data = data3[data3$split_sample == 0 & !is.na(data3$log_lev), ],
+  se = "hetero", notes = FALSE
+)
+
+m4 <- feols(
+  log_lev ~ stl + aftercaldwell + after_stl,
+  data = data3[data3$split_sample == 1 & !is.na(data3$log_lev), ],
+  se = "hetero", notes = FALSE
+)
+# Step 2: Store into a model list
+model_list <- list(m1, m2, m3, m4)
+
+# Step 3: use etable and dict variable name
+etable7 <- etable(
+  model_list,
+  depvar = TRUE,
+  coefstat = "se",
+  keep = c("%stl", "%aftercaldwell", "%after_stl"),
+  
+  # pay attention to letter
+  dict = c(
+    "stl" = "St. Louis",
+    "aftercaldwell" = "After Caldwell",
+    "after_stl" = "St. Louis x After Caldwell"  
+  
+  digits = 3,
+  extralines = list(
+    "Observations" = sapply(model_list, function(m) format(nobs(m), big.mark = ","))
+  )
+)
+
+# Step 4: use stargazer to creat HTML table
+stargazer(etable7,
+          type = "html",
+          summary = FALSE,
+          rownames = FALSE,
+          title = "Table 7: Differences in the Balance Sheets of Bankrupt Businesses",
+          out = "table7_balancesheet.html")
+
+
+```
+<table style="text-align:center"><caption><strong>Table 7: Differences in the Balance Sheets of Bankrupt Businesses</strong></caption>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left"></td><td>model 1</td><td>model 2</td><td>model 3</td><td>model 4</td></tr>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">Dependent Var.:</td><td>log_assets</td><td>log_assets</td><td>log_lev</td><td>log_lev</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">St. Louis</td><td>0.957. (0.503)</td><td>-0.374 (0.585)</td><td>-0.227 (0.195)</td><td>0.062 (0.184)</td></tr>
+<tr><td style="text-align:left">After Caldwell</td><td>0.674 (0.432)</td><td>-0.314 (0.488)</td><td>-0.167 (0.169)</td><td>-0.031 (0.157)</td></tr>
+<tr><td style="text-align:left">St. Louis x After Caldwell</td><td>-0.490 (0.644)</td><td>0.204 (0.748)</td><td>0.142 (0.276)</td><td>0.134 (0.285)</td></tr>
+<tr><td style="text-align:left">Observations</td><td>261</td><td>210</td><td>237</td><td>195</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">S.E. type</td><td>Heterosk.-rob.</td><td>Heterosk.-rob.</td><td>Heterosk.-rob.</td><td>Heterosk.-rob.</td></tr>
+<tr><td style="text-align:left">Observations</td><td>261</td><td>210</td><td>237</td><td>195</td></tr>
+<tr><td style="text-align:left">R2</td><td>0.02383</td><td>0.00297</td><td>0.00862</td><td>0.00526</td></tr>
+<tr><td style="text-align:left">Adj. R2</td><td>0.01244</td><td>-0.01155</td><td>-0.00415</td><td>-0.01037</td></tr>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr></table>
+
+
+
+
+
+###Table 8: Differences in debt of bankrupt businesses across FR districts （lack of obersavations）
+```{r eval = FALSE}
+# Load necessary packages
+library(fixest)
+
+# Step 1: Run regressions (Table 8 structure) — cleanly split by sample and remove NA
+# Step 1: Run regressions (Table 8 structure) — clean sample and use robust SEs
+# (1) Total debt — full sample
+m1 <- feols(log_debt ~ stl + aftercaldwell + after_stl,
+            data = data3[data3$split_sample == 0 & !is.na(data3$log_debt), ],
+            se = "hetero", notes = FALSE)
+
+# (2) Total debt — matched sample
+m2 <- feols(log_debt ~ stl + aftercaldwell + after_stl,
+            data = data3[data3$split_sample == 1 & !is.na(data3$log_debt), ],
+            se = "hetero", notes = FALSE)
+
+# (3) Bank debt — full sample
+m3 <- feols(ldbanks ~ stl + aftercaldwell + after_stl,
+            data = data3[data3$split_sample == 0 & !is.na(data3$ldbanks), ],
+            se = "hetero", notes = FALSE)
+
+# (4) Bank debt — matched sample
+m4 <- feols(ldbanks ~ stl + aftercaldwell + after_stl,
+            data = data3[data3$split_sample == 1 & !is.na(data3$ldbanks), ],
+            se = "hetero", notes = FALSE)
+
+# (5) Trade credit — full sample
+m5 <- feols(ldbus ~ stl + aftercaldwell + after_stl,
+            data = data3[data3$split_sample == 0 & !is.na(data3$ldbus), ],
+            se = "hetero", notes = FALSE)
+
+# (6) Trade credit — matched sample
+m6 <- feols(ldbus ~ stl + aftercaldwell + after_stl,
+            data = data3[data3$split_sample == 1 & !is.na(data3$ldbus), ],
+            se = "hetero", notes = FALSE)
+
+
+# Step 2: Create a list of models
+model_list <- list(m1, m2, m3, m4, m5, m6)
+
+# Step 3: Generate formatted table using etable
+etable_output <- etable(
+  model_list,
+  title = "Table 8: Differences in the Composition of Debt Owed by Bankrupt Businesses",
+  depvar = TRUE,
+  coefstat = "se",
+  digits = 3,
+  signif.code = NA,
+  keep = c("%stl", "%aftercaldwell", "%after_stl"),
+  dict = c(
+    "stl" = "St. Louis",
+    "aftercaldwell" = "After Caldwell",
+    "after_stl" = "St. Louis x After Caldwell"
+  ),
+  extralines = list(
+    "Observations" = sapply(model_list, function(m) format(nobs(m), big.mark = ","))
+  )
+)
+
+stargazer(etable_output,
+          type = "html",
+          title = "Table 8: Differences in the Composition of Debt Owed by Bankrupt Businesses",
+          summary = FALSE) 
+
+```
+<table style="text-align:center"><caption><strong>Table 8: Differences in the Composition of Debt Owed by Bankrupt Businesses</strong></caption>
+<tr><td colspan="8" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left"></td><td>.1</td><td>model 1</td><td>model 2</td><td>model 3</td><td>model 4</td><td>model 5</td><td>model 6</td></tr>
+<tr><td colspan="8" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">1</td><td>Dependent Var.:</td><td>log_debt</td><td>log_debt</td><td>ldbanks</td><td>ldbanks</td><td>ldbus</td><td>ldbus</td></tr>
+<tr><td style="text-align:left">2</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">3</td><td>St. Louis</td><td>0.740 (0.326)</td><td>0.020 (0.321)</td><td>-0.206 (0.718)</td><td>-1.38 (0.956)</td><td>0.654 (0.297)</td><td>0.034 (0.407)</td></tr>
+<tr><td style="text-align:left">4</td><td>After Caldwell</td><td>0.527 (0.313)</td><td>-0.032 (0.323)</td><td>0.816 (0.540)</td><td>0.362 (0.805)</td><td>0.122 (0.323)</td><td>0.106 (0.327)</td></tr>
+<tr><td style="text-align:left">5</td><td>St. Louis x After Caldwell</td><td>-0.677 (0.428)</td><td>-0.367 (0.465)</td><td>0.326 (1.03)</td><td>-0.236 (1.19)</td><td>-1.23 (0.527)</td><td>-0.626 (0.563)</td></tr>
+<tr><td style="text-align:left">6</td><td>Observations</td><td>261</td><td>210</td><td>273</td><td>219</td><td>273</td><td>219</td></tr>
+<tr><td style="text-align:left">7</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">8</td><td>S.E. type</td><td>Heterosk.-rob.</td><td>Heterosk.-rob.</td><td>Heterosk.-rob.</td><td>Heteros.-rob.</td><td>Heteros.-rob.</td><td>Heterosk.-rob.</td></tr>
+<tr><td style="text-align:left">9</td><td>Observations</td><td>261</td><td>210</td><td>273</td><td>219</td><td>273</td><td>219</td></tr>
+<tr><td style="text-align:left">10</td><td>R2</td><td>0.02168</td><td>0.00724</td><td>0.01445</td><td>0.03565</td><td>0.01920</td><td>0.01399</td></tr>
+<tr><td style="text-align:left">11</td><td>Adj. R2</td><td>0.01026</td><td>-0.00722</td><td>0.00346</td><td>0.02219</td><td>0.00826</td><td>0.00023</td></tr>
+<tr><td colspan="8" style="border-bottom: 1px solid black"></td></tr></table>
+
+
+###Table 2 Panal B and C
+```{r eval = FALSE}
+
+# Step 1: Define reusable function
+generate_panel_table <- function(data, condition_expr, panel_title = "Panel B") {
+  # Step 1.1: Subset and drop NA
+  df <- data %>%
+    filter(!!rlang::parse_expr(condition_expr)) %>%
+    filter(!is.na(SIC_Industry))
+
+  # Step 1.2: Convert SIC_Industry to factor
+  df$SIC_Industry <- factor(df$SIC_Industry)
+
+  # Step 1.3: Create dummies
+  dummies <- model.matrix(~ SIC_Industry - 1, data = df)
+  df_dummies <- bind_cols(df %>% select(stl, aftercaldwell), as.data.frame(dummies))
+
+  # Step 1.4: Collapse to mean (→ proportion per cell)
+  collapsed <- df_dummies %>%
+    group_by(stl, aftercaldwell) %>%
+    summarise(across(starts_with("SIC_Industry"), ~ mean(.x) * 100), .groups = "drop")
+
+  # Step 1.5: Normalize so each row sums to 100
+  collapsed <- collapsed %>%
+    rowwise() %>%
+    mutate(scale = sum(c_across(starts_with("SIC_Industry")))) %>%
+    mutate(across(starts_with("SIC_Industry"), ~ 100 * .x / scale)) %>%
+    ungroup() %>%
+    select(-scale)
+
+  # Step 1.6: Reshape to long then wide
+  long_df <- collapsed %>%
+    pivot_longer(cols = starts_with("SIC_Industry"), names_to = "SIC_Industry", values_to = "percent")
+
+  long_df$SIC_Industry <- str_remove(long_df$SIC_Industry, "SIC_Industry")
+  long_df$SIC_Industry <- as.integer(long_df$SIC_Industry)
+
+  wide_stl <- long_df %>%
+    pivot_wider(names_from = stl, values_from = percent, names_prefix = "stl_")
+
+  wide_final <- wide_stl %>%
+    pivot_wider(names_from = aftercaldwell, values_from = c(stl_0, stl_1), names_sep = "_after_") %>%
+    select(SIC_Industry,
+           stl_0_after_0, stl_1_after_0,
+           stl_0_after_1, stl_1_after_1)
+
+  # Step 1.7: Round and handle NA
+  wide_final <- wide_final %>%
+    mutate(across(where(is.numeric), ~ round(.x, 1))) %>%
+    mutate(across(everything(), ~ replace_na(.x, "")))
+
+  # Step 1.8: Label industry
+  sic_labels <- c(
+    "Retail", "Wholesale", "Construction", "Manufacturing",
+    "Mining", "Agriculture, Forestry, Fishing", "", "Services", "Transport"
+  )
+  wide_final$SIC_Industry <- sic_labels[as.integer(wide_final$SIC_Industry)]
+
+  # Step 1.9: Rename columns
+  colnames(wide_final) <- c(
+    "SIC Industry",
+    "Atlanta (Before Caldwell)", "St. Louis (Before Caldwell)",
+    "Atlanta (After Caldwell)", "St. Louis (After Caldwell)"
+  )
+
+  return(wide_final)
+}
+
+# Step 2: Generate Panel B and Panel C using corrected proportions
+panelB <- generate_panel_table(data3, "split_sample == 0", panel_title = "Panel B")
+panelC <- generate_panel_table(data3, "split_sample == 1 & year == 1929", panel_title = "Panel C")
+
+# Step 3: Export HTML using stargazer
+stargazer(panelB,
+          type = "html",
+          summary = FALSE,
+          rownames = FALSE,
+          title = "Panel B: Sample of case files linked to any D&B book",
+          out = "table2_panelB.html")
+
+stargazer(panelC,
+          type = "html",
+          summary = FALSE,
+          rownames = FALSE,
+          title = "Panel C: Sample of case files linked to 1929 D&B book",
+          out = "table2_panelC.html")
+
+
+```
+<table style="text-align:center"><caption><strong>Panel B: Sample of case files linked to any D&B book</strong></caption>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">SIC Industry</td><td>Atlanta (Before Caldwell)</td><td>St. Louis (Before Caldwell)</td><td>Atlanta (After Caldwell)</td><td>St. Louis (After Caldwell)</td></tr>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">Retail</td><td>81.5</td><td>75</td><td>69.3</td><td>77.8</td></tr>
+<tr><td style="text-align:left">Wholesale</td><td>9.3</td><td>10</td><td>9.5</td><td>9.3</td></tr>
+<tr><td style="text-align:left">Construction</td><td>0</td><td>0</td><td>3</td><td>0</td></tr>
+<tr><td style="text-align:left">Manufacturing</td><td>7.4</td><td>12.5</td><td>12.1</td><td>8.3</td></tr>
+<tr><td style="text-align:left">Agriculture, Forestry, Fishing</td><td>0</td><td>0</td><td>1.7</td><td>0.9</td></tr>
+<tr><td style="text-align:left">Services</td><td>1.9</td><td>2.5</td><td>4.3</td><td>2.8</td></tr>
+<tr><td style="text-align:left">Transport</td><td>0</td><td>0</td><td>0</td><td>0.9</td></tr>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr></table>
+
+<table style="text-align:center"><caption><strong>Panel C: Sample of case files linked to 1929 D&B book</strong></caption>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">SIC Industry</td><td>Atlanta (Before Caldwell)</td><td>St. Louis (Before Caldwell)</td><td>Atlanta (After Caldwell)</td><td>St. Louis (After Caldwell)</td></tr>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">Retail</td><td>80.2</td><td>79.8</td><td>78.3</td><td>80</td></tr>
+<tr><td style="text-align:left">Wholesale</td><td>7.7</td><td>9.6</td><td>8.2</td><td>7.9</td></tr>
+<tr><td style="text-align:left">Construction</td><td>1.1</td><td>0</td><td>3.1</td><td>0.5</td></tr>
+<tr><td style="text-align:left">Manufacturing</td><td>8.8</td><td>8.8</td><td>7</td><td>9.5</td></tr>
+<tr><td style="text-align:left">Agriculture, Forestry, Fishing</td><td>0.5</td><td>0.9</td><td>1.1</td><td>1.1</td></tr>
+<tr><td style="text-align:left">Services</td><td>1.6</td><td>0.9</td><td>2.3</td><td>1.1</td></tr>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr></table>
+
+###Appendix Table 3: Industry effects
+###Statistical insignifcance in sample linked to 1929 D&B is not due to industry controls, but to age of firm
+```{r eval = FALSE}
+# Step 1: Subset the data for the year 1929
+data_sub <- subset(data3, year == 1929)
+
+# Step 2: Estimate regressions with industry fixed effects
+# Syntax: outcome ~ predictors | fixed_effect
+# Cluster robust standard errors (heteroskedasticity-robust)
+m1 <- feols(log_assets ~ stl + aftercaldwell + after_stl | SIC_Industry, 
+            data = data_sub, vcov = "hetero", notes = FALSE)
+m2 <- feols(log_lev ~ stl + aftercaldwell + after_stl | SIC_Industry, 
+            data = data_sub, vcov = "hetero", notes = FALSE)
+m3 <- feols(log_debt ~ stl + aftercaldwell + after_stl | SIC_Industry, 
+            data = data_sub, vcov = "hetero", notes = FALSE)
+m4 <- feols(ldbanks ~ stl + aftercaldwell + after_stl | SIC_Industry, 
+            data = data_sub, vcov = "hetero", notes = FALSE)
+m5 <- feols(ldbus ~ stl + aftercaldwell + after_stl | SIC_Industry, 
+            data = data_sub, vcov = "hetero", notes = FALSE)
+
+# Step 3: Generate regression summary table using etable
+etable_out <- etable(
+  m1, m2, m3, m4, m5,
+  keep = c("%stl", "%aftercaldwell", "%after_stl"),  # Match raw variable names with %
+  dict = c(
+    stl = "St. Louis",
+    aftercaldwell = "After Caldwell",               # Ensure spelling matches coef names
+    after_stl = "St. Louis × After Caldwell"         # Interaction term label
+  ),
+  se.below = TRUE,    # Display standard errors below coefficients
+  digits = 3,         # Round numeric values to 3 decimal places
+  headers = c("Assets", "Leverage", "All Debt", "Bank Debt", "Trade Credit")
+)
+
+# Step 4: Export results to HTML using stargazer
+stargazer::stargazer(
+  etable_out,
+  type = "html",
+  title = "Appendix Table 3: Industry Effects",
+  out = "balance_sheet_table.html",
+  summary = FALSE,
+  notes = "Standard errors in parentheses. Industry fixed effects included in all regressions.",
+  notes.align = "l"
+)
+```
+<table style="text-align:center"><caption><strong>Appendix Table 3: Industry Effects</strong></caption>
+<tr><td colspan="7" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left"></td><td>.1</td><td>m1</td><td>m2</td><td>m3</td><td>m4</td><td>m5</td></tr>
+<tr><td colspan="7" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">1</td><td></td><td>Assets</td><td>Leverage</td><td>All Debt</td><td>Bank Debt</td><td>Trade Credit</td></tr>
+<tr><td style="text-align:left">2</td><td>Dependent Var.:</td><td>log_assets</td><td>log_lev</td><td>log_debt</td><td>ldbanks</td><td>ldbus</td></tr>
+<tr><td style="text-align:left">3</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">4</td><td>St. Louis</td><td>-0.076</td><td>0.072</td><td>0.048</td><td>-1.24</td><td>0.064</td></tr>
+<tr><td style="text-align:left">5</td><td></td><td>(0.521)</td><td>(0.185)</td><td>(0.303)</td><td>(0.966)</td><td>(0.405)</td></tr>
+<tr><td style="text-align:left">6</td><td>After Caldwell</td><td>-0.174</td><td>-0.071</td><td>0.043</td><td>0.378</td><td>0.274</td></tr>
+<tr><td style="text-align:left">7</td><td></td><td>(0.485)</td><td>(0.159)</td><td>(0.300)</td><td>(0.822)</td><td>(0.296)</td></tr>
+<tr><td style="text-align:left">8</td><td>St. Louis × After Caldwell</td><td>-0.067</td><td>0.169</td><td>-0.293</td><td>-0.321</td><td>-0.669</td></tr>
+<tr><td style="text-align:left">9</td><td></td><td>(0.711)</td><td>(0.289)</td><td>(0.467)</td><td>(1.20)</td><td>(0.568)</td></tr>
+<tr><td style="text-align:left">10</td><td>Fixed-Effects:</td><td>----------</td><td>--------</td><td>--------</td><td>--------</td><td>--------</td></tr>
+<tr><td style="text-align:left">11</td><td>SIC_Industry</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+<tr><td style="text-align:left">12</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">13</td><td>S.E. type</td><td>Hete.-rob.</td><td>Het.-rob.</td><td>Het.-rob.</td><td>Het.-rob.</td><td>Het.-rob.</td></tr>
+<tr><td style="text-align:left">14</td><td>Observations</td><td>210</td><td>195</td><td>210</td><td>219</td><td>219</td></tr>
+<tr><td style="text-align:left">15</td><td>R2</td><td>0.07913</td><td>0.03767</td><td>0.04800</td><td>0.04320</td><td>0.05614</td></tr>
+<tr><td style="text-align:left">16</td><td>Within R2</td><td>0.00142</td><td>0.00810</td><td>0.00320</td><td>0.03199</td><td>0.01482</td></tr>
+<tr><td colspan="7" style="border-bottom: 1px solid black"></td></tr><tr><td colspan="7" style="text-align:left">Standard errors in parentheses. Industry fixed effects included in all regressions.</td></tr>
+</table>
+
+###Table 9: Differences in debts owed to banks by location of creditors
+```{r eval = FALSE}
+# Step 1: Run regressions for the 8 columns (2 x 2 x 2 setup)
+# Step 1: Run the 8 regressions with notes = FALSE
+m1 <- feols(ldbanksNoMS ~ stl + aftercaldwell + after_stl, data = data3[data3$split_sample == 0,], notes = FALSE)
+m2 <- feols(ldbanksNoMS ~ stl + aftercaldwell + after_stl, data = data3[data3$split_sample == 1,], notes = FALSE)
+m3 <- feols(ldbanksrb ~ stl + aftercaldwell + after_stl, data = data3[data3$split_sample == 0,], notes = FALSE)
+m4 <- feols(ldbanksrb ~ stl + aftercaldwell + after_stl, data = data3[data3$split_sample == 1,], notes = FALSE)
+m5 <- feols(ldbusNoMS ~ stl + aftercaldwell + after_stl, data = data3[data3$split_sample == 0,], notes = FALSE)
+m6 <- feols(ldbusNoMS ~ stl + aftercaldwell + after_stl, data = data3[data3$split_sample == 1,], notes = FALSE)
+m7 <- feols(ldbusrb ~ stl + aftercaldwell + after_stl, data = data3[data3$split_sample == 0,], notes = FALSE)
+m8 <- feols(ldbusrb ~ stl + aftercaldwell + after_stl, data = data3[data3$split_sample == 1,], notes = FALSE)
+
+
+# Step 2: Generate formatted regression table
+etable_out <- etable(
+  m1, m2, m3, m4, m5, m6, m7, m8,
+  keep = c("%stl", "%aftercaldwell", "%after_stl"),  # use % prefix to match raw variable names
+  dict = c(
+    stl = "St. Louis",
+    aftercaldwell = "After Caldwell",
+    after_stl = "St. Louis × After Caldwell"
+  ),
+  headers = c(
+    "Bank Debt: St. Louis", "Bank Debt: RB Regions", 
+    "Bank Debt: St. Louis", "Bank Debt: RB Regions", 
+    "Trade Credit: St. Louis", "Trade Credit: RB Regions", 
+    "Trade Credit: St. Louis", "Trade Credit: RB Regions"
+  ),
+  se.below = TRUE,
+  digits = 3
+)
+
+# Step 3: Export with Stargazer to HTML
+stargazer::stargazer(
+  etable_out,
+  type = "html",
+  title = "Table 9: Differences in Debts Owed to Banks by Location of Creditors",
+  out = "table9_creditors_location.html",
+  summary = FALSE,
+  notes = "Standard errors in parentheses. All dependent variables are in logs. See notes for sample restrictions.",
+  notes.align = "l"
+)
+
+```
+<table style="text-align:center"><caption><strong>Table 9: Differences in Debts Owed to Banks by Location of Creditors</strong></caption>
+<tr><td colspan="10" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left"></td><td>.1</td><td>m1</td><td>m2</td><td>m3</td><td>m4</td><td>m5</td><td>m6</td><td>m7</td><td>m8</td></tr>
+<tr><td colspan="10" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">1</td><td></td><td>Bank Debt: St. Louis</td><td>Bank Debt: RB Regions</td><td>Bank Debt: St. Louis</td><td>Bank Debt: RB Regions</td><td>Trade Credit: St. Louis</td><td>Trade Credit: RB Regions</td><td>Trade Credit: St. Louis</td><td>Trade Credit: RB Regions</td></tr>
+<tr><td style="text-align:left">2</td><td>Dependent Var.:</td><td>ldbanksNoMS</td><td>ldbanksNoMS</td><td>ldbanksrb</td><td>ldbanksrb</td><td>ldbusNoMS</td><td>ldbusNoMS</td><td>ldbusrb</td><td>ldbusrb</td></tr>
+<tr><td style="text-align:left">3</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">4</td><td>St. Louis</td><td>1.07*</td><td>1.23*</td><td>1.06*</td><td>1.04</td><td>2.34* * *</td><td>1.32</td><td>0.429</td><td>-1.24</td></tr>
+<tr><td style="text-align:left">5</td><td></td><td>(0.429)</td><td>(0.576)</td><td>(0.449)</td><td>(0.632)</td><td>(0.536)</td><td>(0.701)</td><td>(0.683)</td><td>(0.839)</td></tr>
+<tr><td style="text-align:left">6</td><td>After Caldwell</td><td>-0.408</td><td>-0.123</td><td>-0.353</td><td>-0.101</td><td>-0.333</td><td>-0.208</td><td>-0.147</td><td>-0.722</td></tr>
+<tr><td style="text-align:left">7</td><td></td><td>(0.319)</td><td>(0.466)</td><td>(0.333)</td><td>(0.511)</td><td>(0.398)</td><td>(0.567)</td><td>(0.507)</td><td>(0.679)</td></tr>
+<tr><td style="text-align:left">8</td><td>St. Louis × After Caldwell</td><td>1.37*</td><td>0.835</td><td>1.69* *</td><td>1.02</td><td>1.93* *</td><td>2.98* * *</td><td>2.01*</td><td>4.24* * *</td></tr>
+<tr><td style="text-align:left">9</td><td></td><td>(0.590)</td><td>(0.708)</td><td>(0.617)</td><td>(0.777)</td><td>(0.737)</td><td>(0.862)</td><td>(0.938)</td><td>(1.03)</td></tr>
+<tr><td style="text-align:left">10</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">11</td><td>S.E. type</td><td>IID</td><td>IID</td><td>IID</td><td>IID</td><td>IID</td><td>IID</td><td>IID</td><td>IID</td></tr>
+<tr><td style="text-align:left">12</td><td>Observations</td><td>273</td><td>219</td><td>273</td><td>219</td><td>273</td><td>219</td><td>273</td><td>219</td></tr>
+<tr><td style="text-align:left">13</td><td>R2</td><td>0.13668</td><td>0.12164</td><td>0.15035</td><td>0.09807</td><td>0.25162</td><td>0.26641</td><td>0.05475</td><td>0.12102</td></tr>
+<tr><td style="text-align:left">14</td><td>Adj. R2</td><td>0.12705</td><td>0.10938</td><td>0.14088</td><td>0.08548</td><td>0.24328</td><td>0.25617</td><td>0.04420</td><td>0.10875</td></tr>
+<tr><td colspan="10" style="border-bottom: 1px solid black"></td></tr><tr><td colspan="10" style="text-align:left">Standard errors in parentheses. All dependent variables are in logs. See notes for sample restrictions.</td></tr>
+</table>
+
+###Table 3: Descriptive statistics for bankrupts and their creditors in the sample  related to regressions in Tables 8 and 9
+###Table groups by: (1) Sample, then St. Louis, then Caldwell
+```{r eval = FALSE}
+# Step 1: Clean data and define groups 
+data3_clean <- data3 %>%
+  filter(!is.na(split_sample)) %>%  # make sure data has no nA
+  mutate(
+    group = case_when(
+      split_sample == 0 & stl == 0 & aftercaldwell == 0 ~ "Full Sample - Atlanta",
+      split_sample == 0 & stl == 1 & aftercaldwell == 0 ~ "Full Sample - St. Louis",
+      split_sample == 1 & stl == 0 & aftercaldwell == 0 ~ "Linked Sample - Atlanta",
+      split_sample == 1 & stl == 1 & aftercaldwell == 0 ~ "Linked Sample - St. Louis"
+    )
+  ) %>%
+  filter(!is.na(group))  # keep active group
+
+# Step 2: define variable need to be analysis
+vars_to_tabulate <- c(
+  "totalassets", "totaldebts", "leverage",
+  "dbanksNoMS", "dbanksSoMS", "dbanksrb", "dbanks",  
+  "dbusNoMS", "dbusSoMS", "dbusrb", "dbus"           
+)
+
+# Step 3: calculate average and did datasummary_balance
+library(tidyr)
+
+# calculate group average 
+table3_summary <- data3_clean %>%
+  group_by(group) %>%
+  summarise(across(all_of(vars_to_tabulate), ~ round(mean(., na.rm = TRUE), 1))) %>%
+  pivot_longer(
+    cols = -group,
+    names_to = "variable",
+    values_to = "value"
+  ) %>%
+  pivot_wider(
+    names_from = group,
+    values_from = value
+  )
+
+# Step 4: add variable name
+variable_labels <- c(
+  "totalassets" = "Total assets",
+  "totaldebts" = "Total debts",
+  "leverage" = "Leverage",
+  "dbanksNoMS" = "Owed to banks in northern MS",
+  "dbanksSoMS" = "Owed to banks in southern MS",  
+  "dbanksrb" = "Owed to banks in RB regions",
+  "dbanks" = "Owed to banks",
+  "dbusNoMS" = "Owed to trade creditors in northern MS",
+  "dbusSoMS" = "Owed to trade creditors in southern MS",
+  "dbusrb" = "Owed to trade creditors in RB regions",
+  "dbus" = "Owed to trade creditors"
+)
+
+table3_summary$variable <- variable_labels[table3_summary$variable]
+
+# Step 5: export to html
+stargazer::stargazer(
+  as.matrix(table3_summary),
+  type = "html",
+  summary = FALSE,
+  digits = 1,
+  title = "Table 3: Averages of Balance Sheet Items for Business Bankrupts Before the Caldwell Event",
+  rownames = FALSE,
+  column.labels = c("Variable", "Full Sample - Atlanta", "Full Sample - St. Louis", "Linked Sample - Atlanta", "Linked Sample - St. Louis"),
+  out = "table3_final.html"
+)
+```
+<table style="text-align:center"><caption><strong>Table 3: Averages of Balance Sheet Items for Business Bankrupts Before the Caldwell Event</strong></caption>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">variable</td><td>Full Sample - Atlanta</td><td>Full Sample - St. Louis</td><td>Linked Sample - Atlanta</td><td>Linked Sample - St. Louis</td></tr>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">Total assets</td><td>6696.8</td><td>10616.2</td><td>64716.6</td><td>10282.2</td></tr>
+<tr><td style="text-align:left">Total debts</td><td>11100.4</td><td>15938.2</td><td>42335.4</td><td>13036.0</td></tr>
+<tr><td style="text-align:left">Leverage</td><td>4.9</td><td>2.5</td><td>1.7</td><td>2.3</td></tr>
+<tr><td style="text-align:left">Owed to banks in northern MS</td><td>480.3</td><td>626.5</td><td>1524.9</td><td>872.8</td></tr>
+<tr><td style="text-align:left">Owed to banks in southern MS</td><td>485.4</td><td>0.0</td><td>7552.4</td><td>0.0</td></tr>
+<tr><td style="text-align:left">Owed to banks in RB regions</td><td>480.6</td><td>687.9</td><td>1541.7</td><td>873.4</td></tr>
+<tr><td style="text-align:left">Owed to banks</td><td>1615.8</td><td>3218.5</td><td>10306.2</td><td>1462.4</td></tr>
+<tr><td style="text-align:left">Owed to trade creditors in northern MS</td><td>397.1</td><td>1870.4</td><td>390.9</td><td>920.5</td></tr>
+<tr><td style="text-align:left">Owed to trade creditors in southern MS</td><td>4381.1</td><td>504.6</td><td>6485.7</td><td>74.6</td></tr>
+<tr><td style="text-align:left">Owed to trade creditors in RB regions</td><td>1437.3</td><td>4990.7</td><td>1200.2</td><td>4061.1</td></tr>
+<tr><td style="text-align:left">Owed to trade creditors</td><td>7472.6</td><td>8528.5</td><td>13211.0</td><td>7575.7</td></tr>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr></table>
